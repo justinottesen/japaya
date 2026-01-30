@@ -3,6 +3,7 @@ package python
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,80 +13,140 @@ import (
 )
 
 func TestPytestWorker(t *testing.T) {
-	// Allow opt-out if needed (CI, quick iteration, etc.)
 	if os.Getenv("JAPAYA_SKIP_PYTEST") == "1" {
 		t.Skip("JAPAYA_SKIP_PYTEST=1")
 	}
 
-	pyDir := mustPyDir(t)
+	root := mustRepoRoot(t)
+	pyDir := filepath.Join(root, "internal", "python", "py")
+	venvDir := filepath.Join(pyDir, ".venv")
+	reqFile := filepath.Join(pyDir, "requirements-dev.txt")
 
-	// Timeout so a hung worker/test doesn't hang `go test`.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	cmd, err := pytestCommand(ctx)
+	pyExe, err := ensureVenvPython(ctx, venvDir)
 	if err != nil {
-		t.Skip(err.Error())
+		t.Skipf("python not available to create venv: %v", err)
 	}
 
-	cmd.Dir = pyDir
+	// Install/verify deps.
+	if _, err := os.Stat(reqFile); err != nil {
+		t.Fatalf("missing %s: %v", reqFile, err)
+	}
+	if err := pipInstall(ctx, pyExe, reqFile); err != nil {
+		t.Fatalf("pip install failed: %v", err)
+	}
 
-	// Inherit environment; if you want to force a venv, you can adjust PATH here.
-	cmd.Env = os.Environ()
+	// Run pytest.
+	if err := runPytest(ctx, pyExe, pyDir); err != nil {
+		t.Fatalf("pytest failed: %v", err)
+	}
+}
+
+func mustRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+
+	// Walk up until we find go.mod (or .git)
+	d := filepath.Dir(thisFile)
+	for {
+		if d == filepath.Dir(d) {
+			t.Fatal("could not find repo root (no go.mod/.git)")
+		}
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d
+		}
+		if st, err := os.Stat(filepath.Join(d, ".git")); err == nil && st.IsDir() {
+			return d
+		}
+		d = filepath.Dir(d)
+	}
+}
+
+func ensureVenvPython(ctx context.Context, venvDir string) (string, error) {
+	// If venv already exists, return its python.
+	if exe := venvPythonPath(venvDir); exe != "" {
+		return exe, nil
+	}
+
+	// Find a system python to create venv.
+	sysPy, err := lookPathAny([]string{"python3", "python"})
+	if err != nil {
+		// Windows users might rely on "py"; include if you care.
+		if runtime.GOOS == "windows" {
+			sysPy, err = lookPathAny([]string{"python", "py"})
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Create venv.
+	if err := os.MkdirAll(venvDir, 0o755); err != nil {
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, sysPy, "-m", "venv", venvDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", errors.New(string(out))
+	}
+
+	exe := venvPythonPath(venvDir)
+	if exe == "" {
+		return "", errors.New("venv created but python not found inside it")
+	}
+	return exe, nil
+}
+
+func venvPythonPath(venvDir string) string {
+	// POSIX
+	posix := filepath.Join(venvDir, "bin", "python")
+	if st, err := os.Stat(posix); err == nil && !st.IsDir() {
+		return posix
+	}
+	// Windows
+	win := filepath.Join(venvDir, "Scripts", "python.exe")
+	if st, err := os.Stat(win); err == nil && !st.IsDir() {
+		return win
+	}
+	return ""
+}
+
+func pipInstall(ctx context.Context, pyExe, reqFile string) error {
+	// Upgrade pip first (optional but helps with fresh envs)
+	cmd1 := exec.CommandContext(ctx, pyExe, "-m", "pip", "install", "-q", "--upgrade", "pip")
+	if out, err := cmd1.CombinedOutput(); err != nil {
+		return errors.New(string(out))
+	}
+
+	cmd2 := exec.CommandContext(ctx, pyExe, "-m", "pip", "install", "-q", "-r", reqFile)
+	if out, err := cmd2.CombinedOutput(); err != nil {
+		return errors.New(string(out))
+	}
+	return nil
+}
+
+func runPytest(ctx context.Context, pyExe, pyDir string) error {
+	cmd := exec.CommandContext(ctx, pyExe, "-m", "pytest", pyDir)
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("pytest failed: %v\n\nOutput:\n%s", err, out.String())
+		return errors.New(out.String())
 	}
+	return nil
 }
 
-// Locate internal/python/py relative to this file.
-func mustPyDir(t *testing.T) string {
-	t.Helper()
-
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-
-	// thisFile == .../internal/python/pytest_test.go
-	pythonDir := filepath.Dir(thisFile)
-	pyDir := filepath.Join(pythonDir, "py")
-
-	if st, err := os.Stat(pyDir); err != nil || !st.IsDir() {
-		t.Fatalf("expected python py dir at %q", pyDir)
-	}
-
-	return pyDir
-}
-
-// Prefer running pytest as "python -m pytest" so we don't rely on pytest being on PATH.
-func pytestCommand(ctx context.Context) (*exec.Cmd, error) {
-	// If user wants to force a specific python, allow it:
-	// e.g. JAPAYA_PYTHON=internal/python/py/.venv/bin/python
-	if forced := os.Getenv("JAPAYA_PYTHON"); forced != "" {
-		if _, err := os.Stat(forced); err == nil {
-			return exec.CommandContext(ctx, forced, "-m", "pytest"), nil
+func lookPathAny(names []string) (string, error) {
+	for _, n := range names {
+		if p, err := exec.LookPath(n); err == nil {
+			return p, nil
 		}
 	}
-
-	// Try common python executables.
-	candidates := []string{"python3", "python"}
-	if runtime.GOOS == "windows" {
-		candidates = []string{"python", "py"}
-	}
-
-	for _, exe := range candidates {
-		if _, err := exec.LookPath(exe); err != nil {
-			continue
-		}
-
-		// Use -m pytest; if pytest isn't installed for that interpreter, this will fail.
-		return exec.CommandContext(ctx, exe, "-m", "pytest"), nil
-	}
-
-	return nil, exec.ErrNotFound
+	return "", exec.ErrNotFound
 }
