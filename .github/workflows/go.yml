@@ -10,9 +10,14 @@ on:
     branches: [ "master" ]
 
 jobs:
-
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
     steps:
     - uses: actions/checkout@v4
 
@@ -30,10 +35,13 @@ jobs:
         cache-dependency-path: internal/python/py/requirements-dev.txt
 
     - name: Ensure scripts are executable
+      if: runner.os != 'Windows'
       run: chmod +x scripts/*.sh
 
     - name: Build
       run: ./scripts/build.sh
+      shell: bash
 
     - name: Test
       run: ./scripts/test.sh
+      shell: bash
