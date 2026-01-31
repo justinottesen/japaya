@@ -7,4 +7,4 @@ source "$SCRIPT_DIR/lib/repo.sh"
 ROOT_DIR="$(repo_root)"
 
 mkdir -p "$ROOT_DIR/bin"
-go build -o "$ROOT_DIR/bin" -v "$ROOT_DIR/..."
+go build -o "$ROOT_DIR/bin" "$ROOT_DIR/..." "$@"

@@ -6,4 +6,4 @@ source "$SCRIPT_DIR/lib/repo.sh"
 
 ROOT_DIR="$(repo_root)"
 
-go test "$ROOT_DIR/..." -race -count=1 -v
+go test "$ROOT_DIR/..." -race -count=1 "$@"
