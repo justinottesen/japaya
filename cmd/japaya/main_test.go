@@ -14,6 +14,7 @@ import (
 var buildOnce sync.Once
 var builtBinPath string
 var buildErr error
+var buildDir string
 
 func TestJapaya_Success_StatementAndBlock(t *testing.T) {
 	t.Parallel()
@@ -185,7 +186,15 @@ func buildJapayaBinary(t *testing.T) string {
 
 	buildOnce.Do(func() {
 		root := repoRoot(t)
-		out := filepath.Join(t.TempDir(), exeName("japaya-test-bin"))
+
+		var err error
+		buildDir, err = os.MkdirTemp("", "japaya-e2e-*")
+		if err != nil {
+			buildErr = err
+			return
+		}
+
+		out := filepath.Join(buildDir, exeName("japaya-test-bin"))
 
 		cmd := exec.Command("go", "build", "-o", out, "./cmd/japaya")
 		cmd.Dir = root
@@ -194,9 +203,6 @@ func buildJapayaBinary(t *testing.T) string {
 		cmd.Stderr = &stderr
 
 		if err := cmd.Run(); err != nil {
-			buildErr = err
-			builtBinPath = ""
-			// Include stderr in the error path for debugging.
 			buildErr = &buildFailure{err: err, stderr: stderr.String()}
 			return
 		}
