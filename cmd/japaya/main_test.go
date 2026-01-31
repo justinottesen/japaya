@@ -250,3 +250,196 @@ func findPython() (string, bool) {
 	}
 	return "", false
 }
+
+func TestJapaya_TreeMode_TranslatesSubtree_RewritesJapayaToJava(t *testing.T) {
+	t.Parallel()
+
+	pythonCmd, ok := findPython()
+	if !ok {
+		t.Skip("python not found in PATH")
+	}
+
+	inRoot := t.TempDir()
+	outRoot := filepath.Join(t.TempDir(), "out")
+
+	// Inputs: one .java, one .japaya in nested dirs, plus ignored files.
+	mustWrite(t, filepath.Join(inRoot, "A.java"), "public class A {}\n")
+	mustWrite(t, filepath.Join(inRoot, "sub", "B.japaya"), "public class B {}\n")
+	mustWrite(t, filepath.Join(inRoot, "sub", "C.java"), "public class C {}\n")
+	mustWrite(t, filepath.Join(inRoot, "README.md"), "ignore\n")
+	mustWrite(t, filepath.Join(inRoot, "sub", "notes.txt"), "ignore\n")
+
+	res := runJapaya(t, []string{
+		"-in", inRoot,
+		"-out", outRoot,
+		"-python", pythonCmd,
+	})
+
+	if res.exitCode != 0 {
+		t.Fatalf("expected success (0), got %d\nstderr:\n%s", res.exitCode, res.stderr)
+	}
+
+	// .java stays .java
+	mustExist(t, filepath.Join(outRoot, "A.java"))
+	mustExist(t, filepath.Join(outRoot, "sub", "C.java"))
+
+	// .japaya becomes .java
+	mustExist(t, filepath.Join(outRoot, "sub", "B.java"))
+	mustNotExist(t, filepath.Join(outRoot, "sub", "B.japaya"))
+
+	// ignored files not emitted
+	mustNotExist(t, filepath.Join(outRoot, "README.md"))
+	mustNotExist(t, filepath.Join(outRoot, "sub", "notes.txt"))
+}
+
+func TestJapaya_TreeMode_SkipsJunkDirs(t *testing.T) {
+	t.Parallel()
+
+	pythonCmd, ok := findPython()
+	if !ok {
+		t.Skip("python not found in PATH")
+	}
+
+	inRoot := t.TempDir()
+	outRoot := filepath.Join(t.TempDir(), "out")
+
+	// Put eligible files under skipped dirs.
+	mustWrite(t, filepath.Join(inRoot, ".git", "ignored.java"), "public class Ignored {}\n")
+	mustWrite(t, filepath.Join(inRoot, "node_modules", "ignored2.java"), "public class Ignored2 {}\n")
+	mustWrite(t, filepath.Join(inRoot, "bin", "ignored3.java"), "public class Ignored3 {}\n")
+	mustWrite(t, filepath.Join(inRoot, "dist", "ignored4.java"), "public class Ignored4 {}\n")
+
+	// And one normal file.
+	mustWrite(t, filepath.Join(inRoot, "ok", "Kept.java"), "public class Kept {}\n")
+
+	res := runJapaya(t, []string{
+		"-in", inRoot,
+		"-out", outRoot,
+		"-python", pythonCmd,
+	})
+
+	if res.exitCode != 0 {
+		t.Fatalf("expected success (0), got %d\nstderr:\n%s", res.exitCode, res.stderr)
+	}
+
+	mustExist(t, filepath.Join(outRoot, "ok", "Kept.java"))
+
+	// None of these should exist.
+	for _, p := range []string{
+		filepath.Join(outRoot, ".git", "ignored.java"),
+		filepath.Join(outRoot, "node_modules", "ignored2.java"),
+		filepath.Join(outRoot, "bin", "ignored3.java"),
+		filepath.Join(outRoot, "dist", "ignored4.java"),
+	} {
+		mustNotExist(t, p)
+	}
+}
+
+func TestJapaya_TreeMode_RejectsOutputInsideInput(t *testing.T) {
+	t.Parallel()
+
+	pythonCmd, ok := findPython()
+	if !ok {
+		t.Skip("python not found in PATH")
+	}
+
+	inRoot := t.TempDir()
+	outRoot := filepath.Join(inRoot, "generated") // inside input dir
+
+	// Put at least one file in the input so the tool would otherwise do something.
+	mustWrite(t, filepath.Join(inRoot, "A.java"), "public class A {}\n")
+
+	res := runJapaya(t, []string{
+		"-in", inRoot,
+		"-out", outRoot,
+		"-python", pythonCmd,
+	})
+
+	if res.exitCode == 0 {
+		t.Fatalf("expected failure exit code, got 0")
+	}
+	// Loose assertion: message should mention output/input relationship.
+	if !strings.Contains(strings.ToLower(res.stderr), "output") || !strings.Contains(strings.ToLower(res.stderr), "input") {
+		t.Fatalf("expected stderr to mention output/input constraint; got:\n%s", res.stderr)
+	}
+}
+
+func TestJapaya_DirInput_FileOutput_Errors(t *testing.T) {
+	t.Parallel()
+
+	pythonCmd, ok := findPython()
+	if !ok {
+		t.Skip("python not found in PATH")
+	}
+
+	inRoot := t.TempDir()
+	outPath := filepath.Join(t.TempDir(), "out-as-file")
+
+	// Make output a file, but input is a directory.
+	mustWrite(t, outPath, "not a dir\n")
+	mustWrite(t, filepath.Join(inRoot, "A.java"), "public class A {}\n")
+
+	res := runJapaya(t, []string{
+		"-in", inRoot,
+		"-out", outPath,
+		"-python", pythonCmd,
+	})
+
+	if res.exitCode == 0 {
+		t.Fatalf("expected failure exit code, got 0")
+	}
+}
+
+func TestJapaya_FileInput_DirOutput_Errors(t *testing.T) {
+	t.Parallel()
+
+	pythonCmd, ok := findPython()
+	if !ok {
+		t.Skip("python not found in PATH")
+	}
+
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "A.java")
+	outDir := filepath.Join(dir, "outdir")
+
+	mustWrite(t, inPath, "public class A {}\n")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir outdir: %v", err)
+	}
+
+	res := runJapaya(t, []string{
+		"-in", inPath,
+		"-out", outDir,
+		"-python", pythonCmd,
+	})
+
+	if res.exitCode == 0 {
+		t.Fatalf("expected failure exit code, got 0")
+	}
+}
+
+// Helpers local to this test file:
+
+func mustWrite(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q): %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q): %v", path, err)
+	}
+}
+
+func mustExist(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected %q to exist: %v", path, err)
+	}
+}
+
+func mustNotExist(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("expected %q to NOT exist", path)
+	}
+}

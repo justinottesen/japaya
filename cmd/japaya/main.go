@@ -40,7 +40,7 @@ func main() {
 		}
 	}()
 
-	if err := core.TranslateFile(ctx, inPath, outPath, py); err != nil {
+	if err := core.TranslatePath(ctx, inPath, outPath, py); err != nil {
 		var te *core.TranslationError
 		if errors.As(err, &te) {
 			// print something like: file:line:col: message
