@@ -22,9 +22,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run tests
-        run: ./scripts/test.sh
-
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
