@@ -41,11 +41,11 @@ func pickPythonCmd(t *testing.T) string {
 	return ""
 }
 
-func mustStart(t *testing.T) *Python {
+func mustStart(t *testing.T) *PythonWorker {
 	t.Helper()
 
 	cmd := pickPythonCmd(t)
-	p, err := StartPython(cmd)
+	p, err := StartPythonWorker(cmd)
 	if err != nil {
 		t.Fatalf("StartPython(%q) error: %v", cmd, err)
 	}

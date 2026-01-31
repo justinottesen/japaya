@@ -20,10 +20,10 @@ import (
 //go:embed py/worker.py
 var embeddedWorkerPy []byte
 
-// Python is a long-lived Python worker process that evaluates snippets in an
+// PythonWorker is a long-lived Python worker process that evaluates snippets in an
 // isolated namespace per request. This isolation will leak modules if they are
 // mutable, however variables and functions used in blocks will not be leaked
-type Python struct {
+type PythonWorker struct {
 	cmd       *exec.Cmd
 	stdin     io.WriteCloser
 	stdout    *bufio.Reader
@@ -35,18 +35,6 @@ type Python struct {
 	closeError error
 
 	closing atomic.Bool
-}
-
-type evalRequest struct {
-	ctx  context.Context
-	kind string
-	code []byte
-	resp chan evalResponse
-}
-
-type evalResponse struct {
-	out []byte
-	err error
 }
 
 type pythonRequest struct {
@@ -85,7 +73,7 @@ func defaultPythonCmd() string {
 	return "python3"
 }
 
-func StartPython(pythonCmd string) (*Python, error) {
+func StartPythonWorker(pythonCmd string) (*PythonWorker, error) {
 	// Load with defaults if not provided
 	if pythonCmd == "" {
 		pythonCmd = defaultPythonCmd()
@@ -124,7 +112,7 @@ func StartPython(pythonCmd string) (*Python, error) {
 	}
 
 	// Construct the python object
-	p := &Python{
+	p := &PythonWorker{
 		cmd:       cmd,
 		stdin:     stdin,
 		stdout:    bufio.NewReader(stdout),
@@ -135,7 +123,7 @@ func StartPython(pythonCmd string) (*Python, error) {
 }
 
 // Closes stdin and waits for the python process to exit
-func (p *Python) Close() error {
+func (p *PythonWorker) Close() error {
 	p.closeOnce.Do(func() {
 		p.closing.Store(true)
 
@@ -150,12 +138,12 @@ func (p *Python) Close() error {
 	return p.closeError
 }
 
-func (p *Python) IsClosed() bool {
+func (p *PythonWorker) IsClosed() bool {
 	return p.closing.Load()
 }
 
 // Evaluate some python code
-func (p *Python) Eval(ctx context.Context, kind string, code []byte) ([]byte, error) {
+func (p *PythonWorker) Eval(ctx context.Context, kind string, code []byte) ([]byte, error) {
 	// Check if python evaluator is running
 	if p.IsClosed() {
 		return nil, fmt.Errorf("python worker is closed")
@@ -196,7 +184,7 @@ func (p *Python) Eval(ctx context.Context, kind string, code []byte) ([]byte, er
 // Evaluate a single python snippet
 //
 // NOTE: This should be run under the mutex
-func (p *Python) evalOne(kind string, code []byte) ([]byte, error) {
+func (p *PythonWorker) evalOne(kind string, code []byte) ([]byte, error) {
 	// Create a python request from the provided code
 	req := pythonRequest{
 		Kind: kind,
