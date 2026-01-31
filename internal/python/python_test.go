@@ -45,7 +45,7 @@ func mustStart(t *testing.T) *PythonWorker {
 	t.Helper()
 
 	cmd := pickPythonCmd(t)
-	p, err := StartPythonWorker(cmd)
+	p, err := StartPythonWorker(cmd, "")
 	if err != nil {
 		t.Fatalf("StartPython(%q) error: %v", cmd, err)
 	}

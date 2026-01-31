@@ -21,7 +21,7 @@ func TestJapaya_Success_StatementAndBlock(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	dir := t.TempDir()
@@ -82,7 +82,7 @@ func TestJapaya_MissingArgs_ShowsUsage_Exit2(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	// Missing -out
@@ -104,7 +104,7 @@ func TestJapaya_PythonError_PrintsFileLineCol(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	dir := t.TempDir()
@@ -262,7 +262,7 @@ func TestJapaya_TreeMode_TranslatesSubtree_RewritesJapayaToJava(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	inRoot := t.TempDir()
@@ -303,7 +303,7 @@ func TestJapaya_TreeMode_SkipsJunkDirs(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	inRoot := t.TempDir()
@@ -346,7 +346,7 @@ func TestJapaya_TreeMode_RejectsOutputInsideInput(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	inRoot := t.TempDir()
@@ -375,7 +375,7 @@ func TestJapaya_DirInput_FileOutput_Errors(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	inRoot := t.TempDir()
@@ -401,7 +401,7 @@ func TestJapaya_FileInput_DirOutput_Errors(t *testing.T) {
 
 	pythonCmd, ok := findPython()
 	if !ok {
-		t.Skip("python not found in PATH")
+		t.Error("python not found in PATH")
 	}
 
 	dir := t.TempDir()
@@ -447,5 +447,55 @@ func mustNotExist(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err == nil {
 		t.Fatalf("expected %q to NOT exist", path)
+	}
+}
+
+func TestJapaya_Prelude_PyDirInitProvidesNames(t *testing.T) {
+	t.Parallel()
+
+	pythonCmd, ok := findPython()
+	if !ok {
+		t.Error("python not found in PATH")
+	}
+
+	dir := t.TempDir()
+
+	// Create python-dir with __init__.py defining package_name
+	pyDir := filepath.Join(dir, "pydir")
+	if err := os.MkdirAll(pyDir, 0o755); err != nil {
+		t.Fatalf("mkdir pyDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pyDir, "__init__.py"), []byte("package_name = 'com.example'\n"), 0o644); err != nil {
+		t.Fatalf("write __init__.py: %v", err)
+	}
+
+	inPath := filepath.Join(dir, "in.japaya")
+	outPath := filepath.Join(dir, "out.java")
+
+	// Uses bare package_name (no import), relying on prelude.
+	in := "package `package_name`;\n"
+	if err := os.WriteFile(inPath, []byte(in), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	res := runJapaya(t, []string{
+		"-in", inPath,
+		"-out", outPath,
+		"-python", pythonCmd,
+		"-python-dir", pyDir,
+	})
+
+	if res.exitCode != 0 {
+		t.Fatalf("expected success (0), got %d\nstderr:\n%s", res.exitCode, res.stderr)
+	}
+
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+
+	want := "package com.example;\n"
+	if string(got) != want {
+		t.Fatalf("unexpected output:\n--- want ---\n%q\n--- got ---\n%q", want, string(got))
 	}
 }

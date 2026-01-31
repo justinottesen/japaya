@@ -15,9 +15,9 @@ type Evaluator struct {
 	w *PythonWorker
 }
 
-func NewEvaluator(pythonCmd string) (*Evaluator, error) {
+func NewEvaluator(pythonCmd string, pythonDir string) (*Evaluator, error) {
 	// Construct your existing wrapper here.
-	w, err := StartPythonWorker(pythonCmd)
+	w, err := StartPythonWorker(pythonCmd, pythonDir)
 	if err != nil {
 		return nil, err
 	}

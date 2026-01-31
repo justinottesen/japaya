@@ -73,7 +73,7 @@ func defaultPythonCmd() string {
 	return "python3"
 }
 
-func StartPythonWorker(pythonCmd string) (*PythonWorker, error) {
+func StartPythonWorker(pythonCmd string, pythonDir string) (*PythonWorker, error) {
 	// Load with defaults if not provided
 	if pythonCmd == "" {
 		pythonCmd = defaultPythonCmd()
@@ -94,6 +94,32 @@ func StartPythonWorker(pythonCmd string) (*PythonWorker, error) {
 
 	// Create and setup the command
 	cmd := exec.Command(pythonCmd, "-u", workerPath)
+
+	// Add the python dir
+	if pythonDir != "" {
+		// Preserve any existing PYTHONPATH and prepend ours.
+		env := os.Environ()
+		const key = "PYTHONPATH="
+
+		var had bool
+		for i := range env {
+			if strings.HasPrefix(env[i], key) {
+				had = true
+				// Prepend our dir so it wins.
+				env[i] = key + pythonDir + string(os.PathListSeparator) + strings.TrimPrefix(env[i], key)
+				break
+			}
+		}
+		if !had {
+			env = append(env, key+pythonDir)
+		}
+		cmd.Env = env
+
+		// Add an environment variable for the dir as well
+		cmd.Env = append(cmd.Env, "JAPAYA_PY_DIR="+pythonDir)
+	}
+
+	// Get stdin and stdout pipes
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)

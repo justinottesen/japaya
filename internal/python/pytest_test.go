@@ -27,7 +27,7 @@ func TestPytestWorker(t *testing.T) {
 
 	pyExe, err := ensureVenvPython(ctx, venvDir)
 	if err != nil {
-		t.Skipf("python not available to create venv: %v", err)
+		t.Errorf("python not available to create venv: %v", err)
 	}
 
 	// Install/verify deps.

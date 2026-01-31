@@ -2,10 +2,34 @@
 import sys
 import json
 import io
+import os
 import traceback
+import importlib.util
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Tuple
 
+PRELUDE = {}
+
+def load_prelude(py_dir: str) -> dict:
+    init_path = os.path.join(py_dir, "__init__.py")
+    if not os.path.isfile(init_path):
+        return {}
+
+    # Execute __init__.py as a module-like object.
+    spec = importlib.util.spec_from_file_location("japaya_prelude", init_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"failed to load prelude from {init_path}")
+
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    # Export public names into PRELUDE
+    out = {}
+    for name, val in vars(mod).items():
+        if name.startswith("_"):
+            continue
+        out[name] = val
+    return out
 
 def run_stmt(code: str) -> str:
     """
@@ -16,6 +40,7 @@ def run_stmt(code: str) -> str:
       code: 'f"int x = {2+1};"'   -> out: 'int x = 3;'
     """
     globs = {"__builtins__": __builtins__}
+    globs.update(PRELUDE)
     locs = {}
     result = eval(code, globs, locs)
     return "" if result is None else str(result)
@@ -31,6 +56,7 @@ def run_block(code: str) -> Tuple[str, str]:
       print("int y = 4;")
     """
     globs = {"__builtins__": __builtins__}
+    globs.update(PRELUDE)
     locs = {}
     buf_out = io.StringIO()
     buf_err = io.StringIO()
@@ -90,6 +116,18 @@ def handle_request(req: dict) -> dict:
 
 
 def main() -> None:
+    global PRELUDE
+
+    # Load in the init file, if present
+    py_dir = os.environ.get("JAPAYA_PY_DIR", "").strip()
+    if py_dir:
+        try:
+            PRELUDE = load_prelude(py_dir)
+        except Exception:
+            sys.stderr.write(traceback.format_exc())
+            sys.stderr.flush()
+            raise
+
     # JSON-lines protocol: one request per line, one response per line.
     for raw in sys.stdin:
         line = raw.strip()
