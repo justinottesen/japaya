@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "python.injection.japaya",
+  "injectionSelector": "L:source.japaya - (source.python.embedded.japaya | meta.embedded)",
+  "patterns": [
+    {
+      "name": "meta.embedded.block.python.japaya",
+      "begin": "(```)",
+      "end": "(```)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.japaya"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.japaya"
+        }
+      },
+      "contentName": "source.python.embedded.japaya",
+      "patterns": [
+        {
+          "include": "source.python"
+        }
+      ]
+    },
+    {
+      "name": "meta.embedded.inline.python.japaya",
+      "begin": "(`)",
+      "end": "(`)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.japaya"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.japaya"
+        }
+      },
+      "contentName": "source.python.embedded.japaya",
+      "patterns": [
+        {
+          "include": "source.python"
+        }
+      ]
+    }
+  ]
+}

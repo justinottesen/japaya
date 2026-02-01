@@ -1,0 +1,30 @@
+{
+  "name": "japaya",
+  "displayName": "Japaya",
+  "description": "A Python injection framework for Java",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "japaya",
+      "aliases": ["Japaya", "japaya"],
+      "extensions": [".japaya"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "japaya",
+      "scopeName": "source.japaya",
+      "path": "./syntaxes/japaya.tmLanguage.json"
+    },
+    {
+      "scopeName": "python.injection.japaya",
+      "path": "./syntaxes/python.injection.japaya.json",
+      "injectTo": [ "source.japaya" ]
+    }]
+  }
+}
