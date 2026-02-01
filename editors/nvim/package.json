@@ -1,0 +1,62 @@
+{
+  "name": "tree-sitter-japaya",
+  "version": "1.1.0",
+  "description": "Tree-sitter grammar for Japaya (Java with embedded Python)",
+  "main": "bindings/node",
+  "types": "bindings/node",
+  "keywords": [
+    "tree-sitter",
+    "parser",
+    "japaya"
+  ],
+  "files": [
+    "grammar.js",
+    "binding.gyp",
+    "prebuilds/**",
+    "bindings/node/*",
+    "queries/*",
+    "src/**"
+  ],
+  "author": "Justin Ottesen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justinottesen/japaya.git",
+    "directory": "editors/nvim"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.1.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "peerDependencies": {
+    "tree-sitter": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "tree_sitter": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.26.0",
+    "tree-sitter-java": "^0.20.0",
+    "prebuildify": "^6.0.0"
+  },
+  "scripts": {
+    "build": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "parse": "tree-sitter parse",
+    "install": "node-gyp-build",
+    "prebuildify": "prebuildify --napi --strip"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.japaya",
+      "file-types": [
+        "japaya"
+      ],
+      "injection-regex": "japaya",
+      "highlights": "queries/highlights.scm",
+      "injections": "queries/injections.scm"
+    }
+  ]
+}
