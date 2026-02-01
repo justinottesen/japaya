@@ -2,8 +2,15 @@
   "name": "japaya",
   "publisher": "JustinOttesen",
   "displayName": "Japaya",
-  "description": "A Python injection framework for Java",
-  "version": "1.1.0",
+  "description": "VSCode plugin for Japaya - A Python injection framework for Java",
+  "version": "1.1.2",
+  "author": "Justin Ottesen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justinottesen/japaya.git",
+    "directory": "editors/vscode/japaya"
+  },
   "engines": {
     "vscode": "^1.100.0"
   },

@@ -1,7 +1,7 @@
 {
   "name": "tree-sitter-japaya",
-  "version": "1.1.0",
-  "description": "Tree-sitter grammar for Japaya (Java with embedded Python)",
+  "version": "1.1.2",
+  "description": "Tree-sitter grammar for Japaya - A Python injection framework for Java",
   "main": "bindings/node",
   "types": "bindings/node",
   "keywords": [
